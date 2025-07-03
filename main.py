@@ -5,13 +5,14 @@ import subprocess
 
 app = Flask(__name__, static_folder="static")
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
-    return "✅ API работает!"
+    return "🤖 Бот работает!"
 
 @app.route("/process", methods=["POST"])
 def process():
     data = request.get_json()
+
     url = data.get("url")
     filename = data.get("filename", "clip.mp4")
     start = data.get("start", "00:00:30")
@@ -21,33 +22,40 @@ def process():
     clip_path = os.path.join("static", filename)
 
     try:
+        # Скачивание видео через yt_dlp с использованием браузера
         ydl_opts = {
             'outtmpl': original_path,
             'format': 'best',
-            'cookiesfrombrowser': ('chrome',),
+            'cookiesfrombrowser': ('chromium',),
+            'noplaylist': True
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
+        # Нарезка видео
         subprocess.run([
             "ffmpeg", "-ss", start, "-t", duration,
             "-i", original_path, "-c", "copy", clip_path
         ], check=True)
 
+        # Удаление исходного видео
         if os.path.exists(original_path):
             os.remove(original_path)
 
         return jsonify({
             "status": "ok",
+            "message": "Видео нарезано",
+            "filename": filename,
             "url": f"{request.host_url}static/{filename}"
         })
 
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
+# Раздача статичных файлов
 @app.route('/static/<path:filename>')
-def serve_file(filename):
+def serve_clip(filename):
     return send_from_directory('static', filename)
 
 if __name__ == "__main__":
